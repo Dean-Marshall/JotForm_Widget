@@ -332,23 +332,8 @@
                     Object.keys(submission.answers).forEach(key => {
                         const answer = submission.answers[key];
                         if (answer && answer.answer) {
-                            // Handle different answer formats
-                            let answerValue = answer.answer;
-                            
-                            // If answer is an object (like name fields), extract meaningful data
-                            if (typeof answerValue === 'object') {
-                                if (answerValue.first && answerValue.last) {
-                                    answerValue = `${answerValue.first} ${answerValue.last}`;
-                                } else if (answerValue.first) {
-                                    answerValue = answerValue.first;
-                                } else if (answerValue.last) {
-                                    answerValue = answerValue.last;
-                                } else {
-                                    answerValue = JSON.stringify(answerValue);
-                                }
-                            }
-                            
-                            record.answers[key] = answerValue;
+                            // Store the raw answer data
+                            record.answers[key] = answer.answer;
                         }
                     });
                 }
@@ -379,7 +364,23 @@
             // Filter data based on access code column
             filteredData = tableData.filter(record => {
                 const accessCode = record.answers[accessCodeColumn] || '';
-                return accessCode.toString().toLowerCase().includes(searchTerm);
+                
+                // Handle both string and object values (like name fields)
+                let searchableText = '';
+                if (typeof accessCode === 'object') {
+                    // For name fields, combine first and last name
+                    if (accessCode.first && accessCode.last) {
+                        searchableText = `${accessCode.first} ${accessCode.last}`.toLowerCase();
+                    } else if (accessCode.first) {
+                        searchableText = accessCode.first.toLowerCase();
+                    } else if (accessCode.last) {
+                        searchableText = accessCode.last.toLowerCase();
+                    }
+                } else {
+                    searchableText = accessCode.toString().toLowerCase();
+                }
+                
+                return searchableText.includes(searchTerm);
             });
             
             updateDebugInfo(`Search for "${searchTerm}" found ${filteredData.length} results`);
@@ -473,7 +474,24 @@
                 item.className = 'dropdown-item';
                 
                 const accessCode = record.answers[accessCodeColumn] || 'N/A';
-                item.textContent = accessCode;
+                
+                // Display name properly for name fields
+                let displayText = '';
+                if (typeof accessCode === 'object') {
+                    if (accessCode.first && accessCode.last) {
+                        displayText = `${accessCode.first} ${accessCode.last}`;
+                    } else if (accessCode.first) {
+                        displayText = accessCode.first;
+                    } else if (accessCode.last) {
+                        displayText = accessCode.last;
+                    } else {
+                        displayText = 'N/A';
+                    }
+                } else {
+                    displayText = accessCode;
+                }
+                
+                item.textContent = displayText;
                 
                 item.addEventListener('click', () => {
                     selectRecord(record);
@@ -488,14 +506,28 @@
             selectedRecord = record;
             const accessCode = record.answers[accessCodeColumn] || '';
             
-            searchInput.value = accessCode;
+            // Set the display value properly for name fields
+            let displayValue = '';
+            if (typeof accessCode === 'object') {
+                if (accessCode.first && accessCode.last) {
+                    displayValue = `${accessCode.first} ${accessCode.last}`;
+                } else if (accessCode.first) {
+                    displayValue = accessCode.first;
+                } else if (accessCode.last) {
+                    displayValue = accessCode.last;
+                }
+            } else {
+                displayValue = accessCode;
+            }
+            
+            searchInput.value = displayValue;
             closeDropdown();
             populateFields(record);
             
             // Send data to form
             sendWidgetData();
             
-            updateDebugInfo(`Selected record: ${accessCode}`);
+            updateDebugInfo(`Selected record: ${displayValue}`);
         }
 
         // Populate fields with selected record data
@@ -514,7 +546,18 @@
                     
                     const value = document.createElement('span');
                     value.className = 'field-value';
-                    value.textContent = record.answers[key] || 'N/A';
+                    
+                    // Handle different field types for display
+                    const fieldValue = record.answers[key];
+                    if (typeof fieldValue === 'object') {
+                        if (fieldValue.first && fieldValue.last) {
+                            value.textContent = `${fieldValue.first} ${fieldValue.last}`;
+                        } else {
+                            value.textContent = JSON.stringify(fieldValue);
+                        }
+                    } else {
+                        value.textContent = fieldValue || 'N/A';
+                    }
                     
                     fieldRow.appendChild(label);
                     fieldRow.appendChild(value);
@@ -569,25 +612,33 @@
             
             // Set form fields based on mappings if configured
             if (Object.keys(fieldMappings).length > 0) {
-                Object.keys(fieldMappings).forEach(formFieldName => {
-                    const tableColumnId = fieldMappings[formFieldName];
-                    const value = selectedRecord.answers[tableColumnId] || '';
+                Object.keys(fieldMappings).forEach(formFieldId => {
+                    const tableColumnId = fieldMappings[formFieldId];
+                    const tableValue = selectedRecord.answers[tableColumnId];
+                    
+                    let value = '';
+                    
+                    // Handle different field types
+                    if (typeof tableValue === 'object') {
+                        // For name fields, map appropriately
+                        if (formFieldId.includes('first') && tableValue.first) {
+                            value = tableValue.first;
+                        } else if (formFieldId.includes('last') && tableValue.last) {
+                            value = tableValue.last;
+                        } else if (tableValue.first && tableValue.last) {
+                            value = `${tableValue.first} ${tableValue.last}`;
+                        }
+                    } else {
+                        value = tableValue || '';
+                    }
                     
                     // Try different methods to set field values
                     try {
-                        // Method 1: Set by field name/label
-                        JFCustomWidget.setFieldsValueByLabel(formFieldName, value);
+                        // Method 1: Set by field ID
+                        JFCustomWidget.setFieldsValueById(formFieldId, value);
+                        updateDebugInfo(`Set field ${formFieldId} = ${value}`);
                     } catch (e) {
-                        console.warn('Could not set field by label:', formFieldName, e);
-                    }
-                    
-                    try {
-                        // Method 2: Set by field ID if the mapping value looks like an ID
-                        if (formFieldName.includes('input_')) {
-                            JFCustomWidget.setFieldsValueById(formFieldName, value);
-                        }
-                    } catch (e) {
-                        console.warn('Could not set field by ID:', formFieldName, e);
+                        console.warn('Could not set field by ID:', formFieldId, e);
                     }
                 });
             }
