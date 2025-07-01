@@ -1,372 +1,524 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
     <title>JotForm Table to Form Widget</title>
-    
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- JotForm Custom Widget API -->
-    <script src="https://js.jotform.com/JFCustomWidget.js"></script>
-
+    <script src="//js.jotform.com/JotFormCustomWidget.min.js"></script>
     <style>
-        /* Custom styles to enhance the look and feel */
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f9fafb; /* A light gray background */
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f9f9f9;
         }
         
-        /* Style for the settings panel in the JotForm builder */
-        .settings-panel {
-            background-color: white;
+        .widget-container {
+            background: white;
             border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 500px;
         }
-
-        /* Styling for the searchable dropdown in the live form */
-        #search-container {
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .search-container {
             position: relative;
         }
-
-        #dropdown-options {
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        
+        .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
             max-height: 200px;
             overflow-y: auto;
-            border-top: none;
-            z-index: 10;
-        }
-
-        .dropdown-item:hover {
-            background-color: #f3f4f6;
-        }
-
-        /* Helper class to hide elements */
-        .hidden {
+            z-index: 1000;
             display: none;
         }
+        
+        .dropdown-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+        
+        .populated-fields {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .field-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        
+        .field-label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .field-value {
+            color: #333;
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .no-results {
+            padding: 10px;
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
     </style>
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 </head>
-<body class="p-4 md:p-6">
-
-    <!-- Main container for the widget -->
-    <div id="widget-container">
-
-        <!-- ====================================================== -->
-        <!-- SETTINGS VIEW (Visible only in the JotForm Builder)    -->
-        <!-- ====================================================== -->
-        <div id="settings-view" class="hidden settings-panel space-y-6">
-            <div>
-                <h2 class="text-xl font-bold text-gray-800">Table to Form Widget Settings</h2>
-                <p class="text-sm text-gray-500 mt-1">Connect a JotForm Table to auto-populate your form fields.</p>
+<body>
+    <div class="widget-container">
+        <div class="form-group">
+            <label for="accessCodeSearch">Search Access Code:</label>
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="accessCodeSearch" 
+                    placeholder="Type to search access codes..."
+                    autocomplete="off"
+                >
+                <div id="dropdown" class="dropdown"></div>
             </div>
-
-            <!-- API & Table Configuration -->
-            <div class="space-y-4">
-                <div>
-                    <label for="apiKey" class="block text-sm font-medium text-gray-700">JotForm API Key</label>
-                    <input type="password" id="apiKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Your API Key with Table Read access">
-                </div>
-                <div>
-                    <label for="tableId" class="block text-sm font-medium text-gray-700">JotForm Table ID</label>
-                    <input type="text" id="tableId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="e.g., 230000000000000">
-                </div>
-                <div>
-                    <label for="accessCodeColumn" class="block text-sm font-medium text-gray-700">Access Code Column Name</label>
-                    <input type="text" id="accessCodeColumn" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="The column name for the searchable dropdown">
-                     <p class="mt-1 text-xs text-gray-500">This must be the exact name of the column in your Table.</p>
-                </div>
-            </div>
-
-            <!-- Field Mapping -->
-            <div>
-                <h3 class="text-lg font-medium text-gray-800">Field Mapping</h3>
-                <p class="text-sm text-gray-500">Map Table columns to your form fields.</p>
-                <div id="field-mappings-container" class="mt-4 space-y-3">
-                    <!-- Dynamic mapping rows will be added here -->
-                </div>
-                <button id="add-mapping-btn" class="mt-4 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Add Mapping
-                </button>
-            </div>
-
-            <!-- Save Button -->
-            <div class="pt-4 border-t border-gray-200">
-                <button id="save-settings-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Save Settings
-                </button>
-                <p id="settings-feedback" class="text-center mt-2 text-sm text-green-600"></p>
-            </div>
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
         </div>
-
-        <!-- ====================================================== -->
-        <!-- LIVE VIEW (Visible on the published form)              -->
-        <!-- ====================================================== -->
-        <div id="live-view" class="hidden">
-            <div id="loading-state" class="text-center text-gray-600">
-                <p>Loading data...</p>
-            </div>
-            <div id="error-state" class="hidden text-center text-red-600 p-4 bg-red-100 rounded-md">
-                <p id="error-message"></p>
-            </div>
-            <div id="search-container" class="hidden">
-                <label id="search-label" for="search-input" class="block text-sm font-medium text-gray-700 mb-1">Select an entry</label>
-                <input type="text" id="search-input" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Search...">
-                <div id="dropdown-options" class="hidden absolute w-full bg-white border border-gray-300 rounded-b-md shadow-lg">
-                    <!-- Searchable options will be populated here -->
-                </div>
-            </div>
+        
+        <div id="populatedFields" class="populated-fields" style="display: none;">
+            <h4 style="margin-top: 0; color: #4CAF50;">Populated Data:</h4>
+            <div id="fieldsContainer"></div>
+        </div>
+        
+        <div id="loadingMessage" class="loading" style="display: none;">
+            Loading table data...
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            let tableData = []; // To store the full dataset from the JotForm Table
-            let fieldMap = [];   // To store the field mapping configuration
+    <script type="text/javascript">
+        // Global variables
+        let tableData = [];
+        let filteredData = [];
+        let selectedRecord = null;
+        let isDropdownOpen = false;
+        
+        // Widget settings
+        let apiKey = '';
+        let tableId = '';
+        let accessCodeColumn = '';
+        let fieldMappings = {};
+        
+        // DOM elements
+        const searchInput = document.getElementById('accessCodeSearch');
+        const dropdown = document.getElementById('dropdown');
+        const errorMessage = document.getElementById('errorMessage');
+        const populatedFields = document.getElementById('populatedFields');
+        const fieldsContainer = document.getElementById('fieldsContainer');
+        const loadingMessage = document.getElementById('loadingMessage');
 
-            /**
-             * Initializes the widget, determines the view (settings or live),
-             * and sets up event listeners.
-             */
-            JFCustomWidget.subscribe('ready', () => {
-                const settings = JFCustomWidget.getWidgetSettings();
+        // Initialize widget when ready
+        JFCustomWidget.subscribe("ready", function() {
+            try {
+                // Get widget settings
+                apiKey = JFCustomWidget.getWidgetSetting('apiKey') || '';
+                tableId = JFCustomWidget.getWidgetSetting('tableId') || '';
+                accessCodeColumn = JFCustomWidget.getWidgetSetting('accessCodeColumn') || '';
                 
-                if (JFCustomWidget.isWidgetSettable()) {
-                    // We are in the Form Builder -> show settings view
-                    document.getElementById('settings-view').classList.remove('hidden');
-                    setupSettingsView(settings);
-                } else {
-                    // We are on the live form -> show live view
-                    document.getElementById('live-view').classList.remove('hidden');
-                    setupLiveView(settings);
+                // Parse field mappings from settings
+                const mappingsString = JFCustomWidget.getWidgetSetting('fieldMappings') || '{}';
+                try {
+                    fieldMappings = JSON.parse(mappingsString);
+                } catch (e) {
+                    fieldMappings = {};
                 }
-            });
-
-            /**
-             * Sets up the settings view in the Form Builder.
-             * @param {object} settings - The currently saved widget settings.
-             */
-            function setupSettingsView(settings) {
-                // Populate fields with saved settings
-                document.getElementById('apiKey').value = settings.apiKey || '';
-                document.getElementById('tableId').value = settings.tableId || '';
-                document.getElementById('accessCodeColumn').value = settings.accessCodeColumn || '';
                 
-                fieldMap = settings.fieldMap ? JSON.parse(settings.fieldMap) : [];
-                renderFieldMappings();
-
-                // Event Listeners for settings view
-                document.getElementById('add-mapping-btn').addEventListener('click', addMappingRow);
-                document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
-            }
-
-            /**
-             * Renders the field mapping rows based on the fieldMap array.
-             */
-            function renderFieldMappings() {
-                const container = document.getElementById('field-mappings-container');
-                container.innerHTML = ''; // Clear existing rows
-                
-                if (fieldMap.length === 0) {
-                    container.innerHTML = '<p class="text-sm text-gray-500">No mappings defined. Click "Add Mapping" to start.</p>';
-                }
-
-                fieldMap.forEach((mapping, index) => {
-                    const row = document.createElement('div');
-                    row.className = 'flex items-center space-x-2';
-                    row.innerHTML = `
-                        <input type="text" value="${mapping.tableCol}" data-index="${index}" data-type="tableCol" class="flex-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Table Column Name">
-                        <span class="text-gray-500">→</span>
-                        <input type="text" value="${mapping.formField}" data-index="${index}" data-type="formField" class="flex-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" placeholder="Form Field Unique Name">
-                        <button data-index="${index}" class="remove-mapping-btn p-1 text-red-500 hover:text-red-700">&times;</button>
-                    `;
-                    container.appendChild(row);
-                });
-
-                // Add event listeners for the new elements
-                container.querySelectorAll('input').forEach(input => input.addEventListener('change', updateMappingFromInput));
-                container.querySelectorAll('.remove-mapping-btn').forEach(btn => btn.addEventListener('click', removeMappingRow));
-            }
-            
-            /**
-             * Updates the fieldMap array when an input in the mapping UI changes.
-             * @param {Event} e - The change event from the input field.
-             */
-            function updateMappingFromInput(e) {
-                const index = e.target.dataset.index;
-                const type = e.target.dataset.type;
-                fieldMap[index][type] = e.target.value;
-            }
-
-            /**
-             * Adds a new, empty row to the field mapping UI.
-             */
-            function addMappingRow() {
-                fieldMap.push({ tableCol: '', formField: '' });
-                renderFieldMappings();
-            }
-
-            /**
-             * Removes a specific mapping row from the UI and the fieldMap array.
-             * @param {Event} e - The click event from the remove button.
-             */
-            function removeMappingRow(e) {
-                const index = e.target.dataset.index;
-                fieldMap.splice(index, 1);
-                renderFieldMappings();
-            }
-
-            /**
-             * Collects and saves the widget settings to JotForm.
-             */
-            function saveSettings() {
-                const settingsToSave = {
-                    apiKey: document.getElementById('apiKey').value,
-                    tableId: document.getElementById('tableId').value,
-                    accessCodeColumn: document.getElementById('accessCodeColumn').value,
-                    fieldMap: JSON.stringify(fieldMap.filter(m => m.tableCol && m.formField)) // Only save complete mappings
-                };
-
-                JFCustomWidget.sendData(settingsToSave);
-                
-                const feedback = document.getElementById('settings-feedback');
-                feedback.textContent = 'Settings saved successfully!';
-                setTimeout(() => feedback.textContent = '', 3000);
-
-                // This tells JotForm builder that the widget is ready to be used.
-                JFCustomWidget.requestFrameResize({ height: document.body.scrollHeight });
-            }
-
-            /**
-             * Sets up the live view on the published form.
-             * @param {object} settings - The widget settings saved from the builder.
-             */
-            async function setupLiveView(settings) {
-                const { apiKey, tableId, accessCodeColumn, fieldMap: fieldMapString } = settings;
-                const parsedFieldMap = fieldMapString ? JSON.parse(fieldMapString) : [];
-
                 if (!apiKey || !tableId || !accessCodeColumn) {
-                    showError('Widget is not configured correctly. Please check settings in the Form Builder.');
+                    showError('Please configure the widget settings: API Key, Table ID, and Access Code Column are required.');
                     return;
                 }
                 
-                const searchLabel = document.getElementById('search-label');
-                searchLabel.textContent = `Select ${accessCodeColumn}`;
-
-                try {
-                    const response = await fetch(`https://api.jotform.com/v1/tables/${tableId}/entries?apiKey=${apiKey}`);
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch data. Status: ${response.status}. Please check Table ID and API Key.`);
-                    }
-                    const data = await response.json();
-                    tableData = data.content;
-                    
-                    document.getElementById('loading-state').classList.add('hidden');
-                    document.getElementById('search-container').classList.remove('hidden');
-
-                    populateDropdown(tableData, accessCodeColumn);
-                    setupSearchFunctionality(parsedFieldMap, accessCodeColumn);
-
-                } catch (error) {
-                    showError(error.message);
-                }
-            }
-
-            /**
-             * Populates the custom dropdown with options from the table data.
-             * @param {Array} data - The array of row objects from the table.
-             * @param {string} accessCodeColumn - The name of the column to use for options.
-             */
-            function populateDropdown(data, accessCodeColumn) {
-                const dropdownOptions = document.getElementById('dropdown-options');
-                dropdownOptions.innerHTML = ''; // Clear previous options
-                data.forEach(entry => {
-                    const value = entry[accessCodeColumn];
-                    if (value) {
-                        const item = document.createElement('div');
-                        item.className = 'dropdown-item p-2 cursor-pointer';
-                        item.textContent = value;
-                        item.dataset.value = value;
-                        dropdownOptions.appendChild(item);
-                    }
-                });
-            }
-
-            /**
-             * Sets up event listeners for the searchable dropdown functionality.
-             * @param {Array} currentFieldMap - The parsed field mapping configuration.
-             * @param {string} accessCodeColumn - The name of the access code column.
-             */
-            function setupSearchFunctionality(currentFieldMap, accessCodeColumn) {
-                const searchInput = document.getElementById('search-input');
-                const dropdown = document.getElementById('dropdown-options');
-                const allOptions = Array.from(dropdown.querySelectorAll('.dropdown-item'));
-
-                searchInput.addEventListener('focus', () => dropdown.classList.remove('hidden'));
+                // Load table data
+                loadTableData();
                 
-                searchInput.addEventListener('blur', () => {
-                    // Delay hiding to allow click event on items
-                    setTimeout(() => dropdown.classList.add('hidden'), 200);
-                });
+                // Set up event listeners
+                setupEventListeners();
+                
+            } catch (error) {
+                console.error('Widget initialization error:', error);
+                showError('Widget initialization failed. Please check the configuration.');
+            }
+        });
 
-                searchInput.addEventListener('input', () => {
-                    const filter = searchInput.value.toLowerCase();
-                    allOptions.forEach(option => {
-                        const text = option.textContent.toLowerCase();
-                        option.style.display = text.includes(filter) ? '' : 'none';
+        // Set up event listeners
+        function setupEventListeners() {
+            // Search input events
+            searchInput.addEventListener('input', handleSearch);
+            searchInput.addEventListener('focus', handleFocus);
+            searchInput.addEventListener('blur', handleBlur);
+            searchInput.addEventListener('keydown', handleKeydown);
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('.search-container')) {
+                    closeDropdown();
+                }
+            });
+        }
+
+        // Load table data from JotForm API
+        async function loadTableData() {
+            showLoading(true);
+            hideError();
+            
+            try {
+                const baseUrl = 'https://downer.jotform.com/API';
+                const url = `${baseUrl}/form/${tableId}/submissions?apiKey=${apiKey}&limit=1000&orderby=created_at`;
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.responseCode !== 200) {
+                    throw new Error(data.message || 'Failed to fetch table data');
+                }
+                
+                // Process submissions data
+                tableData = processSubmissions(data.content);
+                filteredData = [...tableData];
+                
+                if (tableData.length === 0) {
+                    showError('No data found in the specified table.');
+                } else {
+                    console.log(`Loaded ${tableData.length} records from table`);
+                }
+                
+            } catch (error) {
+                console.error('Error loading table data:', error);
+                showError(`Failed to load table data: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Process submissions data into a usable format
+        function processSubmissions(submissions) {
+            const processed = [];
+            
+            submissions.forEach(submission => {
+                const record = {
+                    id: submission.id,
+                    created_at: submission.created_at,
+                    answers: {}
+                };
+                
+                // Extract answers from submission
+                if (submission.answers) {
+                    Object.keys(submission.answers).forEach(key => {
+                        const answer = submission.answers[key];
+                        if (answer && answer.answer) {
+                            record.answers[key] = answer.answer;
+                        }
                     });
-                });
-
-                dropdown.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('dropdown-item')) {
-                        const selectedValue = e.target.dataset.value;
-                        searchInput.value = selectedValue;
-                        dropdown.classList.add('hidden');
-                        populateFormFields(selectedValue, currentFieldMap, accessCodeColumn);
-                    }
-                });
-            }
-
-            /**
-             * Finds the selected entry and populates the form fields based on the mapping.
-             * @param {string} selectedValue - The value chosen from the dropdown.
-             * @param {Array} currentFieldMap - The field mapping configuration.
-             * @param {string} accessCodeColumn - The name of the access code column.
-             */
-            function populateFormFields(selectedValue, currentFieldMap, accessCodeColumn) {
-                const selectedEntry = tableData.find(entry => entry[accessCodeColumn] === selectedValue);
-                if (!selectedEntry) return;
-
-                const valuesToFill = {};
-                currentFieldMap.forEach(mapping => {
-                    if (selectedEntry.hasOwnProperty(mapping.tableCol)) {
-                        valuesToFill[mapping.formField] = selectedEntry[mapping.tableCol];
-                    }
-                });
-
-                JFCustomWidget.setFieldsValue(valuesToFill);
-            }
-
-            /**
-             * Displays an error message in the live view.
-             * @param {string} message - The error message to display.
-             */
-            function showError(message) {
-                document.getElementById('loading-state').classList.add('hidden');
-                const errorState = document.getElementById('error-state');
-                document.getElementById('error-message').textContent = message;
-                errorState.classList.remove('hidden');
-            }
-
-            // Adjust frame height on ready and after settings are saved
-            JFCustomWidget.subscribe("ready", () => {
-                JFCustomWidget.requestFrameResize({ height: document.body.scrollHeight });
+                }
+                
+                processed.push(record);
             });
-            JFCustomWidget.subscribe("submit", () => {
-                 JFCustomWidget.requestFrameResize({ height: document.body.scrollHeight });
+            
+            return processed;
+        }
+
+        // Handle search input
+        function handleSearch(event) {
+            const searchTerm = event.target.value.toLowerCase().trim();
+            
+            if (searchTerm === '') {
+                filteredData = [...tableData];
+                closeDropdown();
+                clearPopulatedFields();
+                return;
+            }
+            
+            // Filter data based on access code column
+            filteredData = tableData.filter(record => {
+                const accessCode = record.answers[accessCodeColumn] || '';
+                return accessCode.toLowerCase().includes(searchTerm);
             });
+            
+            updateDropdown();
+            openDropdown();
+        }
+
+        // Handle input focus
+        function handleFocus() {
+            if (searchInput.value.trim() !== '') {
+                openDropdown();
+            }
+        }
+
+        // Handle input blur (with delay to allow dropdown clicks)
+        function handleBlur() {
+            setTimeout(() => {
+                if (!isDropdownOpen) {
+                    closeDropdown();
+                }
+            }, 150);
+        }
+
+        // Handle keyboard navigation
+        function handleKeydown(event) {
+            const items = dropdown.querySelectorAll('.dropdown-item');
+            let selectedIndex = -1;
+            
+            // Find currently selected item
+            items.forEach((item, index) => {
+                if (item.classList.contains('selected')) {
+                    selectedIndex = index;
+                }
+            });
+            
+            switch (event.key) {
+                case 'ArrowDown':
+                    event.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                    updateSelection(items, selectedIndex);
+                    break;
+                    
+                case 'ArrowUp':
+                    event.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, 0);
+                    updateSelection(items, selectedIndex);
+                    break;
+                    
+                case 'Enter':
+                    event.preventDefault();
+                    if (selectedIndex >= 0 && items[selectedIndex]) {
+                        selectRecord(filteredData[selectedIndex]);
+                    }
+                    break;
+                    
+                case 'Escape':
+                    closeDropdown();
+                    break;
+            }
+        }
+
+        // Update dropdown selection
+        function updateSelection(items, selectedIndex) {
+            items.forEach((item, index) => {
+                item.classList.toggle('selected', index === selectedIndex);
+                if (index === selectedIndex) {
+                    item.style.backgroundColor = '#e3f2fd';
+                } else {
+                    item.style.backgroundColor = '';
+                }
+            });
+        }
+
+        // Update dropdown content
+        function updateDropdown() {
+            dropdown.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.className = 'no-results';
+                noResults.textContent = 'No matching access codes found';
+                dropdown.appendChild(noResults);
+                return;
+            }
+            
+            // Limit to first 10 results for performance
+            const displayData = filteredData.slice(0, 10);
+            
+            displayData.forEach((record, index) => {
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+                
+                const accessCode = record.answers[accessCodeColumn] || 'N/A';
+                item.textContent = accessCode;
+                
+                item.addEventListener('click', () => {
+                    selectRecord(record);
+                });
+                
+                dropdown.appendChild(item);
+            });
+        }
+
+        // Select a record from dropdown
+        function selectRecord(record) {
+            selectedRecord = record;
+            const accessCode = record.answers[accessCodeColumn] || '';
+            
+            searchInput.value = accessCode;
+            closeDropdown();
+            populateFields(record);
+            
+            // Send data to form
+            sendWidgetData();
+        }
+
+        // Populate fields with selected record data
+        function populateFields(record) {
+            fieldsContainer.innerHTML = '';
+            
+            // Show all available fields from the record
+            Object.keys(record.answers).forEach(key => {
+                if (key !== accessCodeColumn) { // Don't show the access code field again
+                    const fieldRow = document.createElement('div');
+                    fieldRow.className = 'field-row';
+                    
+                    const label = document.createElement('span');
+                    label.className = 'field-label';
+                    label.textContent = `Field ${key}:`;
+                    
+                    const value = document.createElement('span');
+                    value.className = 'field-value';
+                    value.textContent = record.answers[key] || 'N/A';
+                    
+                    fieldRow.appendChild(label);
+                    fieldRow.appendChild(value);
+                    fieldsContainer.appendChild(fieldRow);
+                }
+            });
+            
+            populatedFields.style.display = 'block';
+        }
+
+        // Clear populated fields
+        function clearPopulatedFields() {
+            populatedFields.style.display = 'none';
+            selectedRecord = null;
+        }
+
+        // Open dropdown
+        function openDropdown() {
+            if (filteredData.length > 0 || searchInput.value.trim() !== '') {
+                dropdown.style.display = 'block';
+                isDropdownOpen = true;
+            }
+        }
+
+        // Close dropdown
+        function closeDropdown() {
+            dropdown.style.display = 'none';
+            isDropdownOpen = false;
+        }
+
+        // Show/hide loading message
+        function showLoading(show) {
+            loadingMessage.style.display = show ? 'block' : 'none';
+        }
+
+        // Show error message
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        // Hide error message
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        // Send widget data to the form
+        function sendWidgetData() {
+            if (!selectedRecord) {
+                return;
+            }
+            
+            // Prepare data to send to form
+            const widgetData = {
+                valid: true,
+                value: selectedRecord.answers[accessCodeColumn] || '',
+                selectedRecord: selectedRecord,
+                allAnswers: selectedRecord.answers
+            };
+            
+            // Set form fields based on mappings
+            if (Object.keys(fieldMappings).length > 0) {
+                Object.keys(fieldMappings).forEach(formField => {
+                    const tableColumn = fieldMappings[formField];
+                    const value = selectedRecord.answers[tableColumn] || '';
+                    
+                    // Set field value by field name
+                    JFCustomWidget.setFieldsValueByLabel(formField, value);
+                });
+            }
+            
+            // Send the widget data
+            JFCustomWidget.sendSubmit(widgetData);
+        }
+
+        // Handle form submission
+        JFCustomWidget.subscribe("submit", function() {
+            const data = {
+                valid: true,
+                value: selectedRecord ? selectedRecord.answers[accessCodeColumn] || '' : searchInput.value
+            };
+            
+            if (selectedRecord) {
+                data.selectedRecord = selectedRecord;
+                data.allAnswers = selectedRecord.answers;
+            }
+            
+            JFCustomWidget.sendSubmit(data);
         });
     </script>
 </body>
