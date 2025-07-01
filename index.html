@@ -120,6 +120,15 @@
             color: #666;
             font-style: italic;
         }
+        
+        .debug-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -146,6 +155,11 @@
         <div id="loadingMessage" class="loading" style="display: none;">
             Loading table data...
         </div>
+        
+        <div id="debugInfo" class="debug-info" style="display: none;">
+            <strong>Debug Info:</strong><br>
+            <div id="debugContent"></div>
+        </div>
     </div>
 
     <script type="text/javascript">
@@ -168,6 +182,8 @@
         const populatedFields = document.getElementById('populatedFields');
         const fieldsContainer = document.getElementById('fieldsContainer');
         const loadingMessage = document.getElementById('loadingMessage');
+        const debugInfo = document.getElementById('debugInfo');
+        const debugContent = document.getElementById('debugContent');
 
         // Initialize widget when ready
         JFCustomWidget.subscribe("ready", function() {
@@ -184,6 +200,9 @@
                 } catch (e) {
                     fieldMappings = {};
                 }
+                
+                // Show debug info
+                showDebugInfo();
                 
                 if (!apiKey || !tableId || !accessCodeColumn) {
                     showError('Please configure the widget settings: API Key, Table ID, and Access Code Column are required.');
@@ -202,6 +221,17 @@
             }
         });
 
+        // Show debug information
+        function showDebugInfo() {
+            debugContent.innerHTML = `
+                API Key: ${apiKey ? 'Set (' + apiKey.substring(0, 8) + '...)' : 'Not set'}<br>
+                Table ID: ${tableId || 'Not set'}<br>
+                Access Code Column: ${accessCodeColumn || 'Not set'}<br>
+                Field Mappings: ${JSON.stringify(fieldMappings)}<br>
+            `;
+            debugInfo.style.display = 'block';
+        }
+
         // Set up event listeners
         function setupEventListeners() {
             // Search input events
@@ -218,22 +248,49 @@
             });
         }
 
-        // Load table data from JotForm API
+        // Load table data using JSONP to avoid CORS issues
         async function loadTableData() {
             showLoading(true);
             hideError();
             
             try {
+                // Use JotForm's API with JSONP callback to avoid CORS
+                const callbackName = 'jotformCallback_' + Date.now();
+                const script = document.createElement('script');
+                
+                // Create promise to handle JSONP response
+                const jsonpPromise = new Promise((resolve, reject) => {
+                    window[callbackName] = function(data) {
+                        delete window[callbackName];
+                        document.head.removeChild(script);
+                        resolve(data);
+                    };
+                    
+                    // Set timeout for request
+                    setTimeout(() => {
+                        if (window[callbackName]) {
+                            delete window[callbackName];
+                            document.head.removeChild(script);
+                            reject(new Error('Request timeout'));
+                        }
+                    }, 10000);
+                });
+                
+                // Build API URL
                 const baseUrl = 'https://downer.jotform.com/API';
-                const url = `${baseUrl}/form/${tableId}/submissions?apiKey=${apiKey}&limit=1000&orderby=created_at`;
+                const url = `${baseUrl}/form/${tableId}/submissions?apiKey=${apiKey}&limit=1000&orderby=created_at&callback=${callbackName}`;
                 
-                const response = await fetch(url);
+                script.src = url;
+                script.onerror = () => {
+                    delete window[callbackName];
+                    document.head.removeChild(script);
+                    throw new Error('Failed to load script');
+                };
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                document.head.appendChild(script);
                 
-                const data = await response.json();
+                // Wait for JSONP response
+                const data = await jsonpPromise;
                 
                 if (data.responseCode !== 200) {
                     throw new Error(data.message || 'Failed to fetch table data');
@@ -247,11 +304,13 @@
                     showError('No data found in the specified table.');
                 } else {
                     console.log(`Loaded ${tableData.length} records from table`);
+                    updateDebugInfo(`Loaded ${tableData.length} records successfully`);
                 }
                 
             } catch (error) {
                 console.error('Error loading table data:', error);
                 showError(`Failed to load table data: ${error.message}`);
+                updateDebugInfo(`Error: ${error.message}`);
             } finally {
                 showLoading(false);
             }
@@ -273,7 +332,23 @@
                     Object.keys(submission.answers).forEach(key => {
                         const answer = submission.answers[key];
                         if (answer && answer.answer) {
-                            record.answers[key] = answer.answer;
+                            // Handle different answer formats
+                            let answerValue = answer.answer;
+                            
+                            // If answer is an object (like name fields), extract meaningful data
+                            if (typeof answerValue === 'object') {
+                                if (answerValue.first && answerValue.last) {
+                                    answerValue = `${answerValue.first} ${answerValue.last}`;
+                                } else if (answerValue.first) {
+                                    answerValue = answerValue.first;
+                                } else if (answerValue.last) {
+                                    answerValue = answerValue.last;
+                                } else {
+                                    answerValue = JSON.stringify(answerValue);
+                                }
+                            }
+                            
+                            record.answers[key] = answerValue;
                         }
                     });
                 }
@@ -282,6 +357,12 @@
             });
             
             return processed;
+        }
+
+        // Update debug info
+        function updateDebugInfo(message) {
+            const currentContent = debugContent.innerHTML;
+            debugContent.innerHTML = currentContent + '<br>' + message;
         }
 
         // Handle search input
@@ -298,9 +379,10 @@
             // Filter data based on access code column
             filteredData = tableData.filter(record => {
                 const accessCode = record.answers[accessCodeColumn] || '';
-                return accessCode.toLowerCase().includes(searchTerm);
+                return accessCode.toString().toLowerCase().includes(searchTerm);
             });
             
+            updateDebugInfo(`Search for "${searchTerm}" found ${filteredData.length} results`);
             updateDropdown();
             openDropdown();
         }
@@ -412,6 +494,8 @@
             
             // Send data to form
             sendWidgetData();
+            
+            updateDebugInfo(`Selected record: ${accessCode}`);
         }
 
         // Populate fields with selected record data
@@ -483,27 +567,30 @@
                 return;
             }
             
-            // Prepare data to send to form
-            const widgetData = {
-                valid: true,
-                value: selectedRecord.answers[accessCodeColumn] || '',
-                selectedRecord: selectedRecord,
-                allAnswers: selectedRecord.answers
-            };
-            
-            // Set form fields based on mappings
+            // Set form fields based on mappings if configured
             if (Object.keys(fieldMappings).length > 0) {
-                Object.keys(fieldMappings).forEach(formField => {
-                    const tableColumn = fieldMappings[formField];
-                    const value = selectedRecord.answers[tableColumn] || '';
+                Object.keys(fieldMappings).forEach(formFieldName => {
+                    const tableColumnId = fieldMappings[formFieldName];
+                    const value = selectedRecord.answers[tableColumnId] || '';
                     
-                    // Set field value by field name
-                    JFCustomWidget.setFieldsValueByLabel(formField, value);
+                    // Try different methods to set field values
+                    try {
+                        // Method 1: Set by field name/label
+                        JFCustomWidget.setFieldsValueByLabel(formFieldName, value);
+                    } catch (e) {
+                        console.warn('Could not set field by label:', formFieldName, e);
+                    }
+                    
+                    try {
+                        // Method 2: Set by field ID if the mapping value looks like an ID
+                        if (formFieldName.includes('input_')) {
+                            JFCustomWidget.setFieldsValueById(formFieldName, value);
+                        }
+                    } catch (e) {
+                        console.warn('Could not set field by ID:', formFieldName, e);
+                    }
                 });
             }
-            
-            // Send the widget data
-            JFCustomWidget.sendSubmit(widgetData);
         }
 
         // Handle form submission
